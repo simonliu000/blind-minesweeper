@@ -484,6 +484,7 @@
       for(let c=0;c<COLS;c++){
         const div = cells[r][c];
         div.addEventListener('mouseenter', () => { hoverCell = [r,c]; });
+        div.addEventListener('mouseleave', () => { if(hoverCell && hoverCell[0]===r && hoverCell[1]===c) hoverCell = null; });
         div.addEventListener('mousedown', e => {
           if(e.button === 0) onLeftPress(r,c);
           else if(e.button === 2) onRightClick(r,c);
@@ -644,7 +645,6 @@
 
   function onRightClick(r, c){
     if(liveBoard.gameOver) return;
-    if(!liveBoard.minesPlaced) return;
     toggleFlag(liveBoard, r, c);
     renderLive();
   }
@@ -689,7 +689,7 @@
   // New game / difficulty switching
   // ---------------------------------------------------------------------
   function newGame(){
-    stopLiveTimer();ss
+    stopLiveTimer();
 
     liveCells = buildGrid(liveGridEl);
     wireLiveCells(liveCells);
