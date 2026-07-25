@@ -257,7 +257,7 @@
       <div class="statusbar">
         <span id="live-mines">Mines: 40</span>
         <span class="status-msg" id="live-status"></span>
-        <span id="live-timer">0s</span>
+        <span id="live-timer">0.000s</span>
       </div>
       <div class="grid" id="live-grid"></div>
       <div class="controls-row">
@@ -573,15 +573,23 @@
     renderSync();
   }
 
+  function updateTimerDisplay(){
+    if(!liveStartTime) return;
+    const t = ((performance.now() - liveStartTime) / 1000).toFixed(3);
+    liveTimerLabel.textContent = t + 's';
+  }
+
   function startLiveTimer(){
     stopLiveTimer();
-    liveTimerInterval = setInterval(() => {
-      const t = Math.floor((performance.now() - liveStartTime)/1000);
-      liveTimerLabel.textContent = t + 's';
-    }, 250);
+    liveTimerInterval = setInterval(updateTimerDisplay, 16);
   }
+
   function stopLiveTimer(){
-    if(liveTimerInterval){ clearInterval(liveTimerInterval); liveTimerInterval = null; }
+    if(liveTimerInterval){ 
+      clearInterval(liveTimerInterval); 
+      liveTimerInterval = null; 
+      updateTimerDisplay(); // Freeze final exact time
+    }
   }
 
   function startChordPreview(r, c){
@@ -720,7 +728,7 @@
 
     liveStatusLabel.textContent = '';
     liveStatusLabel.className = 'status-msg';
-    liveTimerLabel.textContent = '0s';
+    liveTimerLabel.textContent = '0.000s';
     renderLive();
   }
 
