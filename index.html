@@ -6,21 +6,21 @@
 <title>Blind Minesweeper</title>
 <style>
   :root{
-    --bg:            #212121;
-    --panel:         #1c1f28;
-    --panel-border:  #2c3040;
-    --hidden:        #454a5a;
-    --hidden-hi:     #545a6e;
-    --revealed:      #dcdde2;
-    --mine:          #c8433c;
-    --mine-exploded: #ea2020;
-    --flag:          #e0574f;
-    --accent:        #A6A6A6;
-    --accent-dim:    #9c7a35;
-    --text:          #FFFFFF;
-    --text-dim:      #FFFFFF;
-    --win:           #58c97a;
-    --lose:          #ea5c56;
+    --bg:             #212121;
+    --panel:          #1c1f28;
+    --panel-border:   #2c3040;
+    --hidden:         #454a5a;
+    --hidden-hi:      #545a6e;
+    --revealed:       #dcdde2;
+    --mine:           #c8433c;
+    --mine-exploded:  #ea2020;
+    --flag:           #e0574f;
+    --accent:         #A6A6A6;
+    --accent-dim:     #9c7a35;
+    --text:           #FFFFFF;
+    --text-dim:       #FFFFFF;
+    --win:            #58c97a;
+    --lose:           #ea5c56;
 
     --n1:#3b82c4; --n2:#3f9142; --n3:#c6423b;
     --n4:#7c4bb0; --n5:#8a3d2c; --n6:#2a9aa0;
@@ -32,9 +32,7 @@
   body{
     margin:0;
     min-height:100vh;
-    background:
-
-      var(--bg);
+    background: var(--bg);
     color:var(--text);
     font-family: 'Arial', system-ui, sans-serif;
     display:flex;
@@ -211,26 +209,6 @@
     flex-wrap: wrap;
   }
 
-  .replay-scrub{ width: 100%; margin-top: 10px; accent-color: var(--accent); }
-
-  select{
-    font-family: inherit;
-    background:#262a37;
-    color: var(--text);
-    border:1px solid var(--panel-border);
-    border-radius:6px;
-    padding: 5px 6px;
-    font-size:0.8rem;
-  }
-
-  .replay-progress{
-    font-family:'Arial', monospace;
-    font-size:0.75rem;
-    color: var(--text-dim);
-    margin-top:6px;
-    text-align:center;
-  }
-
   footer{
     margin-top: 28px;
     font-size: 0.78rem;
@@ -262,7 +240,7 @@
   <p class="subtitle">
     Left-click or <kbd>S</kbd> reveals, right-click or <kbd>F</kbd> flags.
     <kbd>R</kbd> restarts.
-    No numbers appear on your board. The replay panel shows the your game with numbers.
+    No numbers appear on your board. The sync panel live-reveals your game with numbers.
   </p>
 
   <div class="difficulty-bar" id="difficulty-bar">
@@ -288,28 +266,16 @@
     </div>
 
     <div class="panel replay">
-      <div class="panel-header"><span>Replay Viewer</span><span class="tag">numbers on</span></div>
+      <div class="panel-header">
+        <span>Live Sync View</span>
+        <button id="btn-toggle-sync" class="accent" style="padding: 2px 8px; font-size: 0.75rem;">ON</button>
+      </div>
       <div class="statusbar">
-        <span id="replay-mines">Mines: 40</span>
-        <span class="status-msg" id="replay-status">no moves yet</span>
-        <span id="replay-count">0/0</span>
+        <span id="sync-mines">Mines: 40</span>
+        <span class="status-msg" id="sync-status"></span>
+        <span>Synced</span>
       </div>
-      <div class="grid" id="replay-grid"></div>
-      <div class="controls-row">
-        <button id="btn-step-back" disabled>&#9664;&#124;</button>
-        <button id="btn-play" disabled>&#9654; Play</button>
-        <button id="btn-pause" disabled>&#10074;&#10074; Pause</button>
-        <button id="btn-step-fwd" disabled>&#124;&#9654;</button>
-        <button id="btn-jump-live" disabled>Jump to Live</button>
-        <select id="speed-select">
-          <option value="1">1x</option>
-          <option value="2" selected>2x</option>
-          <option value="4">4x</option>
-          <option value="8">8x</option>
-        </select>
-      </div>
-      <input type="range" id="replay-scrub" class="replay-scrub" min="0" max="0" value="0" disabled>
-      <div class="replay-progress" id="replay-progress-label">move 0 of 0</div>
+      <div class="grid" id="sync-grid"></div>
     </div>
 
   </div>
@@ -365,7 +331,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Pure board logic (shared by the live game and the replay engine)
+  // Pure board logic
   // ---------------------------------------------------------------------
   function makeEmptyBoard(){
     return {
@@ -485,19 +451,13 @@
     return n;
   }
 
-  function applyEvent(board, ev){
-    if(ev.type === 'reveal') revealCell(board, ev.r, ev.c);
-    else if(ev.type === 'flag') toggleFlag(board, ev.r, ev.c);
-    else if(ev.type === 'chord') chordAt(board, ev.r, ev.c);
-  }
-
   // ---------------------------------------------------------------------
   // DOM setup
   // ---------------------------------------------------------------------
   const liveGridEl = document.getElementById('live-grid');
-  const replayGridEl = document.getElementById('replay-grid');
+  const syncGridEl = document.getElementById('sync-grid');
   let liveCells = [];
-  let replayCells = [];
+  let syncCells = [];
 
   function buildGrid(container){
     container.innerHTML = '';
@@ -559,10 +519,9 @@
   }
 
   // ---------------------------------------------------------------------
-  // Live game state
+  // Live game state & Sync setup
   // ---------------------------------------------------------------------
   let liveBoard;
-  let liveEvents = [];
   let liveStartTime = null;
   let liveTimerInterval = null;
   let hoverCell = null;
@@ -570,14 +529,41 @@
   let sPressCell = null;
   let chordPreviewActive = false;
   let previewCells = [];
+  let syncEnabled = true;
 
   const liveMinesLabel = document.getElementById('live-mines');
   const liveStatusLabel = document.getElementById('live-status');
   const liveTimerLabel = document.getElementById('live-timer');
 
+  const syncMinesLabel = document.getElementById('sync-mines');
+  const syncStatusLabel = document.getElementById('sync-status');
+  const btnToggleSync = document.getElementById('btn-toggle-sync');
+
+  function renderSync(){
+    if(!syncEnabled){
+      const emptyBoard = makeEmptyBoard();
+      renderBoard(syncCells, emptyBoard, false);
+      syncMinesLabel.textContent = 'Mines: ' + MINES;
+      syncStatusLabel.textContent = 'OFF';
+      syncStatusLabel.className = 'status-msg';
+      return;
+    }
+
+    renderBoard(syncCells, liveBoard, true);
+    syncMinesLabel.textContent = 'Mines: ' + (MINES - countFlags(liveBoard));
+    if(liveBoard.gameOver){
+      syncStatusLabel.textContent = liveBoard.win ? 'You win!' : 'You lose';
+      syncStatusLabel.className = 'status-msg ' + (liveBoard.win ? 'win' : 'lose');
+    } else {
+      syncStatusLabel.textContent = '';
+      syncStatusLabel.className = 'status-msg';
+    }
+  }
+
   function renderLive(){
     renderBoard(liveCells, liveBoard, false);
     liveMinesLabel.textContent = 'Mines: ' + (MINES - countFlags(liveBoard));
+    renderSync();
   }
 
   function startLiveTimer(){
@@ -589,12 +575,6 @@
   }
   function stopLiveTimer(){
     if(liveTimerInterval){ clearInterval(liveTimerInterval); liveTimerInterval = null; }
-  }
-
-  function recordEvent(type, r, c){
-    const t = liveStartTime === null ? 0 : (performance.now() - liveStartTime);
-    liveEvents.push({type, r, c, t});
-    updateReplayAvailability();
   }
 
   function startChordPreview(r, c){
@@ -643,25 +623,21 @@
     if(chordPreviewActive){
       clearChordPreview();
       chordAt(liveBoard, r, c);
-      recordEvent('chord', r, c);
       afterLiveAction();
       return;
     }
 
     if(!liveBoard.minesPlaced){
-      const mines = placeMinesRandom(liveBoard, r, c);
-      liveBoard._recordedMines = mines;
+      placeMinesRandom(liveBoard, r, c);
       liveStartTime = performance.now();
       startLiveTimer();
     }
 
     if(liveBoard.state[r][c] === STATE_HIDDEN){
       revealCell(liveBoard, r, c);
-      recordEvent('reveal', r, c);
       afterLiveAction();
     } else if(liveBoard.state[r][c] === STATE_REVEALED){
       chordAt(liveBoard, r, c);
-      recordEvent('chord', r, c);
       afterLiveAction();
     }
   }
@@ -670,7 +646,6 @@
     if(liveBoard.gameOver) return;
     if(!liveBoard.minesPlaced) return;
     toggleFlag(liveBoard, r, c);
-    recordEvent('flag', r, c);
     renderLive();
   }
 
@@ -699,125 +674,28 @@
     }
   });
 
-  // ---------------------------------------------------------------------
-  // Replay engine
-  // ---------------------------------------------------------------------
-  let replayBoard;
-  let replayIndex = 0;
-  let replayPlaying = false;
-  let replayTimer = null;
-
-  const replayMinesLabel = document.getElementById('replay-mines');
-  const replayStatusLabel = document.getElementById('replay-status');
-  const replayCountLabel = document.getElementById('replay-count');
-  const replayScrub = document.getElementById('replay-scrub');
-  const replayProgressLabel = document.getElementById('replay-progress-label');
-  const speedSelect = document.getElementById('speed-select');
-
-  const btnStepBack = document.getElementById('btn-step-back');
-  const btnPlay = document.getElementById('btn-play');
-  const btnPause = document.getElementById('btn-pause');
-  const btnStepFwd = document.getElementById('btn-step-fwd');
-  const btnJumpLive = document.getElementById('btn-jump-live');
-
-  function renderReplay(){
-    renderBoard(replayCells, replayBoard, true);
-    replayMinesLabel.textContent = 'Mines: ' + (MINES - countFlags(replayBoard));
-    replayCountLabel.textContent = replayIndex + '/' + liveEvents.length;
-    replayProgressLabel.textContent = 'move ' + replayIndex + ' of ' + liveEvents.length;
-    if(replayBoard.gameOver){
-      replayStatusLabel.textContent = replayBoard.win ? 'YOU WIN' : 'BOOM';
-      replayStatusLabel.className = 'status-msg ' + (replayBoard.win ? 'win' : 'lose');
-    } else if(liveEvents.length === 0){
-      replayStatusLabel.textContent = 'no moves yet';
-      replayStatusLabel.className = 'status-msg';
+  btnToggleSync.addEventListener('click', () => {
+    syncEnabled = !syncEnabled;
+    btnToggleSync.textContent = syncEnabled ? 'ON' : 'OFF';
+    if(syncEnabled) {
+      btnToggleSync.classList.add('accent');
     } else {
-      replayStatusLabel.textContent = '';
-      replayStatusLabel.className = 'status-msg';
+      btnToggleSync.classList.remove('accent');
     }
-  }
-
-  function rebuildReplayTo(index){
-    replayBoard = makeEmptyBoard();
-    if(liveBoard._recordedMines){
-      for(const [r,c] of liveBoard._recordedMines) replayBoard.mines[r][c] = true;
-      computeCounts(replayBoard);
-      replayBoard.minesPlaced = true;
-    }
-    const clamped = Math.max(0, Math.min(index, liveEvents.length));
-    for(let i=0;i<clamped;i++) applyEvent(replayBoard, liveEvents[i]);
-    replayIndex = clamped;
-    renderReplay();
-    replayScrub.max = liveEvents.length;
-    replayScrub.value = replayIndex;
-  }
-
-  function updateReplayAvailability(){
-    const has = liveEvents.length > 0;
-    btnStepBack.disabled = !has || replayIndex === 0;
-    btnStepFwd.disabled = !has || replayIndex >= liveEvents.length;
-    btnPlay.disabled = !has;
-    btnPause.disabled = !has;
-    btnJumpLive.disabled = !has;
-    replayScrub.disabled = !has;
-    replayScrub.max = liveEvents.length;
-  }
-
-  function stepForward(){
-    if(replayIndex >= liveEvents.length){ pauseReplay(); return; }
-    applyEvent(replayBoard, liveEvents[replayIndex]);
-    replayIndex++;
-    renderReplay();
-    replayScrub.value = replayIndex;
-    updateReplayAvailability();
-  }
-
-  function stepBack(){
-    pauseReplay();
-    rebuildReplayTo(replayIndex - 1);
-    updateReplayAvailability();
-  }
-
-  function playReplay(){
-    if(liveEvents.length === 0) return;
-    if(replayIndex >= liveEvents.length) rebuildReplayTo(0);
-    replayPlaying = true;
-    scheduleNext();
-  }
-  function scheduleNext(){
-    if(!replayPlaying) return;
-    if(replayIndex >= liveEvents.length){ replayPlaying = false; return; }
-    const speed = parseFloat(speedSelect.value) || 1;
-    const prevT = replayIndex > 0 ? liveEvents[replayIndex-1].t : 0;
-    const rawDelay = (liveEvents[replayIndex].t - prevT) / speed;
-    const delay = Math.max(60, Math.min(rawDelay, 1200));
-    replayTimer = setTimeout(() => { stepForward(); scheduleNext(); }, delay);
-  }
-  function pauseReplay(){
-    replayPlaying = false;
-    if(replayTimer){ clearTimeout(replayTimer); replayTimer = null; }
-  }
-
-  btnStepBack.addEventListener('click', stepBack);
-  btnStepFwd.addEventListener('click', () => { pauseReplay(); stepForward(); });
-  btnPlay.addEventListener('click', playReplay);
-  btnPause.addEventListener('click', pauseReplay);
-  btnJumpLive.addEventListener('click', () => { pauseReplay(); rebuildReplayTo(liveEvents.length); });
-  replayScrub.addEventListener('input', () => { pauseReplay(); rebuildReplayTo(parseInt(replayScrub.value, 10)); });
+    renderSync();
+  });
 
   // ---------------------------------------------------------------------
   // New game / difficulty switching
   // ---------------------------------------------------------------------
   function newGame(){
-    stopLiveTimer();
-    pauseReplay();
+    stopLiveTimer();ss
 
     liveCells = buildGrid(liveGridEl);
     wireLiveCells(liveCells);
-    replayCells = buildGrid(replayGridEl);
+    syncCells = buildGrid(syncGridEl);
 
     liveBoard = makeEmptyBoard();
-    liveEvents = [];
     liveStartTime = null;
     pressedCell = null;
     sPressCell = null;
@@ -829,9 +707,6 @@
     liveStatusLabel.className = 'status-msg';
     liveTimerLabel.textContent = '0s';
     renderLive();
-
-    rebuildReplayTo(0);
-    updateReplayAvailability();
   }
 
   document.getElementById('btn-new-game').addEventListener('click', newGame);
