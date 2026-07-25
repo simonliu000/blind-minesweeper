@@ -46,7 +46,7 @@
     letter-spacing: 0.04em;
     font-size: 1.9rem;
     margin: 0 0 4px;
-    color: FFFFFF;
+    color: #FFFFFF;
   }
   h1 span{ color: var(--accent); }
 
@@ -203,10 +203,41 @@
 
   .controls-row{
     display:flex;
-    gap:6px;
+    gap:10px;
     align-items:center;
+    justify-content: space-between;
     margin-top: 10px;
     flex-wrap: wrap;
+  }
+
+  /* Zoom UI */
+  .zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #12141a;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-family: 'Arial', monospace;
+    font-size: 0.8rem;
+  }
+
+  .zoom-controls button {
+    padding: 2px 8px;
+    border: none;
+    background: transparent;
+    font-weight: bold;
+  }
+
+  .zoom-controls button:hover:not(:disabled) {
+    background: #2a2f3d;
+  }
+
+  #zoom-level {
+    min-width: 42px;
+    text-align: center;
+    color: var(--text-dim);
   }
 
   footer{
@@ -239,8 +270,7 @@
   <h1>BLIND MINESWEEPER</h1>
   <p class="subtitle">
     Left-click or <kbd>S</kbd> reveals, right-click or <kbd>F</kbd> flags.
-    <kbd>R</kbd> restarts.
-    No numbers appear on your board. The sync panel live-reveals your game with numbers.
+    <kbd>R</kbd> restarts. No numbers appear on your board. The sync panel reveals the numbers in your game live.
   </p>
 
   <div class="difficulty-bar" id="difficulty-bar">
@@ -262,6 +292,12 @@
       <div class="grid" id="live-grid"></div>
       <div class="controls-row">
         <button class="accent" id="btn-new-game">New Game</button>
+        <div class="zoom-controls">
+          <button id="btn-zoom-out" title="Zoom Out (-)">-</button>
+          <span id="zoom-level">100%</span>
+          <button id="btn-zoom-in" title="Zoom In (+)">+</button>
+          <button id="btn-zoom-reset" title="Reset Zoom (0)">Reset</button>
+        </div>
       </div>
     </div>
 
@@ -308,6 +344,22 @@
   let currentDifficulty = 'intermediate';
   let ROWS, COLS, MINES, CELL_PX;
 
+  // ---------------------------------------------------------------------
+  // Zoom logic
+  // ---------------------------------------------------------------------
+  let currentZoom = 1.0;
+  const MIN_ZOOM = 0.6;
+  const MAX_ZOOM = 2.0;
+  const ZOOM_STEP = 0.1;
+
+  function setZoom(newZoom){
+    currentZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoom));
+    const scaledPx = Math.round(CELL_PX * currentZoom);
+    liveGridEl.style.setProperty('--cell', scaledPx + 'px');
+    syncGridEl.style.setProperty('--cell', scaledPx + 'px');
+    document.getElementById('zoom-level').textContent = Math.round(currentZoom * 100) + '%';
+  }
+
   function applyDifficulty(name){
     const d = DIFFICULTIES[name];
     currentDifficulty = name;
@@ -316,6 +368,7 @@
     document.querySelectorAll('#difficulty-bar button[data-diff]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.diff === name);
     });
+    setZoom(1.0); // Reset zoom level when changing difficulty
   }
 
   const STATE_HIDDEN = 0, STATE_REVEALED = 1, STATE_FLAGGED = 2;
@@ -461,7 +514,8 @@
 
   function buildGrid(container){
     container.innerHTML = '';
-    container.style.setProperty('--cell', CELL_PX + 'px');
+    const scaledPx = Math.round(CELL_PX * currentZoom);
+    container.style.setProperty('--cell', scaledPx + 'px');
     container.style.gridTemplateColumns = `repeat(${COLS}, var(--cell))`;
     container.style.gridTemplateRows = `repeat(${ROWS}, var(--cell))`;
     const cells = [];
@@ -588,7 +642,7 @@
     if(liveTimerInterval){ 
       clearInterval(liveTimerInterval); 
       liveTimerInterval = null; 
-      updateTimerDisplay(); // Freeze final exact time
+      updateTimerDisplay();
     }
   }
 
@@ -639,7 +693,6 @@
     if(!isMouseDown) return;
     isMouseDown = false;
 
-    // Use current hover target when mouse is released
     if(!hoverCell) { clearChordPreview(); return; }
     const [r,c] = hoverCell;
 
@@ -687,8 +740,15 @@
       if(hoverCell) onRightClick(hoverCell[0], hoverCell[1]);
     } else if(key === 'r'){
       newGame();
+    } else if(key === '+' || key === '='){
+      setZoom(currentZoom + ZOOM_STEP);
+    } else if(key === '-'){
+      setZoom(currentZoom - ZOOM_STEP);
+    } else if(key === '0'){
+      setZoom(1.0);
     }
   });
+
   document.addEventListener('keyup', e => {
     const key = e.key.toLowerCase();
     if(key === 's' && sPressCell){
@@ -696,6 +756,20 @@
       onLeftRelease();
     }
   });
+
+  // Ctrl + Wheel Zoom
+  liveGridEl.addEventListener('wheel', e => {
+    if(e.ctrlKey){
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      setZoom(currentZoom + delta);
+    }
+  }, { passive: false });
+
+  // Zoom Button Listeners
+  document.getElementById('btn-zoom-in').addEventListener('click', () => setZoom(currentZoom + ZOOM_STEP));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(currentZoom - ZOOM_STEP));
+  document.getElementById('btn-zoom-reset').addEventListener('click', () => setZoom(1.0));
 
   btnToggleSync.addEventListener('click', () => {
     syncEnabled = !syncEnabled;
