@@ -483,8 +483,14 @@
     for(let r=0;r<ROWS;r++){
       for(let c=0;c<COLS;c++){
         const div = cells[r][c];
-        div.addEventListener('mouseenter', () => { hoverCell = [r,c]; });
-        div.addEventListener('mouseleave', () => { if(hoverCell && hoverCell[0]===r && hoverCell[1]===c) hoverCell = null; });
+        div.addEventListener('mouseenter', () => { 
+          hoverCell = [r,c]; 
+          if(isMouseDown) updateDragHover(r, c);
+        });
+        div.addEventListener('mouseleave', () => { 
+          if(hoverCell && hoverCell[0]===r && hoverCell[1]===c) hoverCell = null; 
+          clearChordPreview();
+        });
         div.addEventListener('mousedown', e => {
           if(e.button === 0) onLeftPress(r,c);
           else if(e.button === 2) onRightClick(r,c);
@@ -526,7 +532,7 @@
   let liveStartTime = null;
   let liveTimerInterval = null;
   let hoverCell = null;
-  let pressedCell = null;
+  let isMouseDown = false;
   let sPressCell = null;
   let chordPreviewActive = false;
   let previewCells = [];
@@ -579,6 +585,7 @@
   }
 
   function startChordPreview(r, c){
+    clearChordPreview();
     chordPreviewActive = true;
     previewCells = [];
     for(const [nr,nc] of neighborsOf(r,c)){
@@ -606,18 +613,27 @@
     }
   }
 
-  function onLeftPress(r, c){
+  function updateDragHover(r, c){
     if(liveBoard.gameOver) return;
-    pressedCell = [r,c];
+    clearChordPreview();
     if(liveBoard.minesPlaced && liveBoard.state[r][c] === STATE_REVEALED){
       startChordPreview(r, c);
     }
   }
 
+  function onLeftPress(r, c){
+    if(liveBoard.gameOver) return;
+    isMouseDown = true;
+    updateDragHover(r, c);
+  }
+
   function onLeftRelease(){
-    if(!pressedCell) return;
-    const [r,c] = pressedCell;
-    pressedCell = null;
+    if(!isMouseDown) return;
+    isMouseDown = false;
+
+    // Use current hover target when mouse is released
+    if(!hoverCell) { clearChordPreview(); return; }
+    const [r,c] = hoverCell;
 
     if(liveBoard.gameOver){ clearChordPreview(); return; }
 
@@ -668,7 +684,6 @@
   document.addEventListener('keyup', e => {
     const key = e.key.toLowerCase();
     if(key === 's' && sPressCell){
-      pressedCell = sPressCell;
       sPressCell = null;
       onLeftRelease();
     }
@@ -697,7 +712,7 @@
 
     liveBoard = makeEmptyBoard();
     liveStartTime = null;
-    pressedCell = null;
+    isMouseDown = false;
     sPressCell = null;
     hoverCell = null;
     chordPreviewActive = false;
